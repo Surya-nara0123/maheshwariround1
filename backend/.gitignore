@@ -1,0 +1,4 @@
+.wwebjs_cache
+authSession
+node_modules
+.env
