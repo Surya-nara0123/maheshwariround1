@@ -159,7 +159,7 @@ client.on("ready", () => {
 
 client.on("message_create", async (msg: Message) => {
   // Ignore messages from groups or from yourself
-  if (msg.fromMe) {
+  if (msg.to.includes("9940537699")) { // change number to you
     const res = await msg.getMentions();
     console.log(res)
   } else {

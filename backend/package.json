@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "run webhook": "npx ts-node index.ts",
-    "run waclient": "npx ts-node script.ts",
+    "webhook": "npx ts-node index.ts",
+    "waclient": "npx ts-node script.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
