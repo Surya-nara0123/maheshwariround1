@@ -51,7 +51,7 @@ const translateSentenceFunctionDeclaration = {
 
 async function summarizeParagraph(paragraph: string): Promise<string> {
   try {
-    console.log("meow")
+    console.log("Summarizing paragraph")
     const response = await ai.models.generateContent({
       model: "gemini-2.0-flash",
       contents: `Please provide a concise summary of the following paragraph: "${paragraph}"`,
@@ -86,11 +86,46 @@ async function translateSentence(
   }
 }
 
+// Get the Chromium executable path from environment variable or use default based on platform
+const getChromiumPath = () => {
+  // If explicitly set in env vars, use that
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+    return process.env.PUPPETEER_EXECUTABLE_PATH;
+  }
+  
+  // Docker environment usually has Chromium at /usr/bin/chromium
+  if (process.env.DOCKER_CONTAINER === 'true') {
+    return '/usr/bin/chromium';
+  }
+  
+  // Common paths by platform
+  switch (process.platform) {
+    case 'linux':
+      return '/usr/bin/chromium-browser';
+    case 'darwin': // macOS
+      return '/Applications/Chromium.app/Contents/MacOS/Chromium';
+    default:
+      return undefined; // Let Puppeteer use its default
+  }
+};
+
 // Initialize WhatsApp client with session data if available
 const client = new Client({
-  authStrategy: new LocalAuth({
-    dataPath: "authSession",
-  }),
+  authStrategy: new LocalAuth({ dataPath: "authSession" }),
+  puppeteer: {
+    executablePath: getChromiumPath(),
+    args: [
+      '--no-sandbox', 
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+      '--disable-gpu'
+    ],
+    headless: true,
+  },
 });
 
 client.on("qr", (qr) => {

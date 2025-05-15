@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "npx ts-node temp.ts",
-    "webhook": "npx ts-node index.ts",
-    "waclient": "npx ts-node script.ts"
+    "build": "tsc",
+    "start": "node dist/script.js",
+    "dev": "npx ts-node script.ts"
   },
   "author": "",
   "license": "ISC",

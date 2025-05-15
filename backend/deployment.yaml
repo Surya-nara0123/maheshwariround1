@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: whatsapp-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: whatsapp-bot
+  template:
+    metadata:
+      labels:
+        app: whatsapp-bot
+    spec:
+      containers:
+        - name: whatsapp-bot
+          image: suryanara0123/whatsapp-gemini-bot:latest
+          ports:
+            - containerPort: 8000 # Change if your app uses a different port
+          env:
+            - name: NODE_ENV
+              value: "production"
+          args: ["npm", "run", "start"]
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+
