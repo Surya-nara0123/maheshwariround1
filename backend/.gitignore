@@ -2,3 +2,4 @@
 authSession
 node_modules
 .env
+temp.ts

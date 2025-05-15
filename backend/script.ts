@@ -1,8 +1,7 @@
 import WAWebJS, { Client, Message, LocalAuth } from "whatsapp-web.js";
 import qrcode from "qrcode-terminal";
 import * as dotenv from "dotenv";
-import fetch from "node-fetch";
-import fs from "fs";
+import { GoogleGenAI, Type } from "@google/genai";
 
 // Load environment variables
 dotenv.config();
@@ -13,132 +12,79 @@ if (!API_KEY) {
   throw new Error("GEMINI_API_KEY not found in environment variables");
 }
 
-const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
+const ai = new GoogleGenAI({ apiKey: API_KEY });
 
-// Function to call Gemini API
-async function callGeminiAPI(prompt: string): Promise<string> {
-  try {
-    const response = await fetch(GEMINI_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+const summarizeParagraphFunctionDeclaration = {
+  name: "summarize_paragraph",
+  description: "Summarizes the given paragraph of text.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      paragraph: {
+        type: Type.STRING,
+        description: "The paragraph of text to summarize.",
       },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-      }),
-    });
+    },
+    required: ["paragraph"],
+  },
+};
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("API Error:", errorData);
-      throw new Error(`API Error: ${response.status}`);
-    }
+const translateSentenceFunctionDeclaration = {
+  name: "translate_sentence",
+  description: "Translates a sentence from one language to another.",
+  parameters: {
+    type: Type.OBJECT,
+    properties: {
+      sentence: {
+        type: Type.STRING,
+        description: "The sentence to translate.",
+      },
+      target_language: {
+        type: Type.STRING,
+        description:
+          'The language to translate the sentence into (e.g., "Spanish", "fr", "de").',
+      },
+    },
+    required: ["sentence", "target_language"],
+  },
+};
 
-    const data = await response.json();
-
-    // Extract text from the response
-    if (
-      data &&
-      data.candidates &&
-      data.candidates[0] &&
-      data.candidates[0].content &&
-      data.candidates[0].content.parts &&
-      data.candidates[0].content.parts[0].text
-    ) {
-      return data.candidates[0].content.parts[0].text;
-    } else {
-      throw new Error("Unexpected API response structure");
-    }
-  } catch (error) {
-    console.error("Error calling Gemini API:", error);
-    throw error;
-  }
-}
-
-// Function to handle text summarization
-async function summarizeText(text: string): Promise<string> {
+async function summarizeParagraph(paragraph: string): Promise<string> {
   try {
-    const prompt = `Please summarize the following text concisely:
-    
-    ${text}`;
-
-    return await callGeminiAPI(prompt);
+    console.log("meow")
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: `Please provide a concise summary of the following paragraph: "${paragraph}"`,
+      config: {
+        candidateCount: 2,
+      },
+    });
+    return response.text!;
   } catch (error) {
-    console.error("Error in summarization:", error);
-    return "Sorry, I encountered an error while trying to summarize your text.";
+    console.error("Error summarizing paragraph:", error);
+    return "Sorry, I couldn't summarize that paragraph due to an error.";
   }
 }
 
-// Function to handle text translation
-async function translateText(
-  text: string,
+// Function to translate a sentence
+async function translateSentence(
+  sentence: string,
   targetLanguage: string
 ): Promise<string> {
   try {
-    const prompt = `Translate the following text to ${targetLanguage}:
-    
-    ${text}
-    Don't add any other text. Just the translated text if possible else sorry couldn't translate
-    `;
-
-    return await callGeminiAPI(prompt);
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: `Translate, blindly with any assumption you need and only one sentence and one answer, the following sentence to ${targetLanguage}: "${sentence}"`,
+      config: {
+        candidateCount: 2,
+      },
+    });
+    return response.text!;
   } catch (error) {
-    console.error("Error in translation:", error);
-    return `Sorry, I encountered an error while trying to translate to ${targetLanguage}.`;
+    console.error("Error translating sentence:", error);
+    return `Sorry, I couldn't translate that sentence to ${targetLanguage} due to an error.`;
   }
 }
-
-// Command handling
-async function processMessage(message: string): Promise<string> {
-  // Check for commands
-  if (message.startsWith("/summarise")) {
-    const textToSummarize = message.replace("/summarise", "").trim();
-    if (!textToSummarize) {
-      return "Please provide text to summarize after the /summarise command.";
-    }
-    return await summarizeText(textToSummarize);
-  }
-
-  if (message.startsWith("/translate-to-")) {
-    const match = message.match(/^\/translate-to-([a-zA-Z]+)\s+(.+)$/);
-    if (!match) {
-      return "Please use the format: /translate-to-{language} {text to translate}";
-    }
-    const targetLanguage = match[1];
-    const textToTranslate = match[2];
-    return await translateText(textToTranslate, targetLanguage);
-  }
-
-  if (message.startsWith("/help")) {
-    return "Available commands:\n- /summarise {text}: Summarize the provided text\n- /translate-to-{language} {text}: Translate text to the specified language\n- /help: Show this help message";
-  }
-
-  // Regular conversation
-  return "I don't recognize that command. Type /help to see available commands.";
-}
-
-const SESSION_FILE_PATH = "./whatsapp-session.json";
-
-// Load session from file if it exists
-const loadSession = () => {
-  if (fs.existsSync(SESSION_FILE_PATH)) {
-    console.log("Loading session from file...");
-    const sessionData = JSON.parse(fs.readFileSync(SESSION_FILE_PATH, "utf8"));
-    return sessionData;
-  }
-  return null;
-};
-
-// Try to load existing session
-const sessionData = loadSession();
 
 // Initialize WhatsApp client with session data if available
 const client = new Client({
@@ -158,32 +104,68 @@ client.on("ready", () => {
 });
 
 client.on("message_create", async (msg: Message) => {
-  // Ignore messages from groups or from yourself
-  if (msg.to.includes("9940537699")) { // change number to you
-    const res = await msg.getMentions();
-    console.log(res)
-  } else {
-    try {
-      console.log(`Received message from ${msg.from}: ${msg.body}`);
+  //handle messages only from me
+  if (msg.fromMe && !msg.from.includes("g.us") && !(msg.body == "Hello")) {
+    // for simplicity and to avoid unnesseary calls to the server...
+    if (msg.body.includes("@ai")) {
+      // msg.reply("Hello Bitch");
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: msg.body.replace("@ai", ""),
+        config: {
+          tools: [
+            {
+              functionDeclarations: [
+                summarizeParagraphFunctionDeclaration,
+                translateSentenceFunctionDeclaration,
+              ],
+            },
+          ],
+        },
+      });
 
-      // Don't respond to empty messages
-      if (!msg.body.trim()) return;
+      console.log("Gemini response:", response.functionCalls);
 
-      // Process the message
-      const response = await processMessage(msg.body);
+      if (!response.functionCalls) {
+        await msg.reply("Sorry That is not a recognised command");
+      } else {
+        const functionCall = response.functionCalls[0];
+        const functionName = functionCall.name;
 
-      // Reply to the message
-      await msg.reply(response);
-      console.log(
-        `Sent response: ${response.substring(0, 50)}${
-          response.length > 50 ? "..." : ""
-        }`
-      );
-    } catch (error) {
-      console.error("Error processing WhatsApp message:", error);
-      await msg.reply(
-        "Sorry, I encountered an error while processing your message."
-      );
+        // Handle each function type
+        switch (functionName) {
+          case "summarize_paragraph": {
+            const args =
+              typeof functionCall.args === "string"
+                ? JSON.parse(functionCall.args)
+                : functionCall.args || {};
+            const paragraph = args.paragraph;
+            const summary = await summarizeParagraph(paragraph);
+            await msg.reply(`📝 Summary: ${summary}`);
+            break;
+          }
+          case "translate_sentence": {
+            const args =
+              typeof functionCall.args === "string"
+                ? JSON.parse(functionCall.args)
+                : functionCall.args || {};
+            const sentence = args.sentence;
+            const targetLanguage = args.target_language;
+            const translation = await translateSentence(
+              sentence,
+              targetLanguage
+            );
+            await msg.reply(
+              `🌐 Translation (${targetLanguage}): ${translation}`
+            );
+            break;
+          }
+          default:
+            await msg.reply("Sorry, I don't know how to handle that request.");
+            break;
+        }
+      }
+      console.log(response.candidates!);
     }
   }
 });
